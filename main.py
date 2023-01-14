@@ -1,9 +1,11 @@
 import requests
 from pathlib import Path
 import json
+import cgi
 
 
 last_ldn_info_path = Path('last_ldn_info.json')
+download_dir = Path('download')
 
 
 def load_last_ldn_info():
@@ -41,19 +43,22 @@ def get_ldn_info():
 
 def download_windows_package(ldn_info):
     download_url_map = ldn_info['download_url']
-    download_url = download_url_map.get('Windows (Avalonia UI)') or download_url_map.get('Windows')
-    if not download_url:
-        raise RuntimeError('No download url found')
-    print(f'download_url: {download_url}')
-    download_file(download_url, f'download/ldn-{ldn_info["version"]}.zip')
+    for k in download_url_map:
+        if 'windows' in k.lower():
+            download_url = download_url_map[k]
+            print(f'download_url: {download_url}')
+            download_file(download_url)
 
 
-def download_file(url, local_filename):
+def download_file(url, local_filename=None):
     ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
     headers = {'user-agent': ua}
     with requests.get(url, headers=headers, stream=True) as r:
         r.raise_for_status()
-        with open(local_filename, 'wb') as f:
+        if local_filename is None and 'Content-Disposition' in r.headers:
+            value, params = cgi.parse_header(r.headers['Content-Disposition'])
+            local_filename = params['filename']
+        with open(download_dir.joinpath(local_filename), 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
 

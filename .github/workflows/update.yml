@@ -20,40 +20,25 @@ jobs:
     - name: run main.py
       run: |
         python main.py
-    - name: Check is updated
-      id: check-is-updated
-      uses: actions/github-script@v5
-      with:
-        script: |
-          const fs = require('fs')
-          if (fs.readdirSync('download').length < 2) {
-            return 'true'
-          }
-          return 'false'
+        LAST_VERSION=$(jq -r '.version' last_ldn_info.json)
+        echo "last_version=${LAST_VERSION}" >> $GITHUB_ENV
+        if [ $(ls download | wc -l) != "1" ]; then echo "file_updated=true" >> $GITHUB_ENV; fi
     - name: Commit changes
       uses: EndBug/add-and-commit@v9
-      if: ${{steps.check-is-updated.outputs.result}} == "true"
+      if: ${{ env.file_updated }} == "true"
       with:
         author_name: github-actions
         author_email: 41898282+github-actions[bot]@users.noreply.github.com
         message: 'update'
         add: '*.json'
-    - name: Get latest sha
-      run: CURRENT_SHA=$(git rev-parse HEAD)
-    - name: Create tag
-      uses: actions/github-script@v5
-      if: ${{steps.check-is-updated.outputs.result}} == "true"
+        tag: ${{ env.last_version }}
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: ${{ env.file_updated }} == "true"
       with:
-        script: |
-          const fs = require('fs')
-          const { CURRENT_SHA } = process.env
-          console.log(CURRENT_SHA)
-          console.log(context)
-          const jsonString = fs.readFileSync('./last_ldn_info.json')
-          var info = JSON.parse(jsonString)
-          github.rest.git.createRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: 'refs/tags/' + info.version,
-            sha: CURRENT_SHA
-          })
+#        draft: true
+        name: ${{ env.last_version }}
+        tag_name: ${{ env.last_version }}
+        body: LDN archive of ${{ env.last_version }}
+        files: |
+          download/*.zip
