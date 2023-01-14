@@ -1,0 +1,59 @@
+name: Update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        architecture: x64
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+    - name: run main.py
+      run: |
+        python main.py
+    - name: Check is updated
+      id: check-is-updated
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const fs = require('fs')
+          if (fs.readdirSync('download').length < 2) {
+            return 'true'
+          }
+          return 'false'
+    - name: Commit changes
+      uses: EndBug/add-and-commit@v9
+      if: ${{steps.check-is-updated.outputs.result}} == "true"
+      with:
+        author_name: github-actions
+        author_email: 41898282+github-actions[bot]@users.noreply.github.com
+        message: 'update'
+        add: '*.json'
+    - name: Get latest sha
+      run: CURRENT_SHA=$(git rev-parse HEAD)
+    - name: Create tag
+      uses: actions/github-script@v5
+      if: ${{steps.check-is-updated.outputs.result}} == "true"
+      with:
+        script: |
+          const fs = require('fs')
+          const { CURRENT_SHA } = process.env
+          console.log(CURRENT_SHA)
+          console.log(context)
+          const jsonString = fs.readFileSync('./last_ldn_info.json')
+          var info = JSON.parse(jsonString)
+          github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: 'refs/tags/' + info.version,
+            sha: CURRENT_SHA
+          })
